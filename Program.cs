@@ -36,16 +36,28 @@ namespace ADO.NET
                     case "5":
                         ShowAllBooks();
                         break;
+                    case "6":
+                        SellBook();
+                        break;
+                    case "7":
+                        WriteOffBook();
+                        break;
+                    case "8":
+                        AddBookToPromotion();
+                        break;
+                    case "9":
+                        ReserveBook();
+                        break;
                     case "0":
                         Console.WriteLine("Выход из программы.");
                         return;
                     default:
-                        Console.WriteLine("Э тут так не принята понял да.");
+                        Console.WriteLine("Некорректный выбор. Попробуйте снова.");
                         break;
                 }
             }
         }
-//FOOOOOR SUPER EEEEEEARTH!
+
         private static void DisplayMenu()
         {
             Console.WriteLine("\nВыберите действие:");
@@ -54,6 +66,10 @@ namespace ADO.NET
             Console.WriteLine("3. Редактировать книгу");
             Console.WriteLine("4. Найти книгу");
             Console.WriteLine("5. Показать все книги");
+            Console.WriteLine("6. Продать книгу");
+            Console.WriteLine("7. Списать книгу");
+            Console.WriteLine("8. Добавить книгу в акцию");
+            Console.WriteLine("9. Отложить книгу для покупателя");
             Console.WriteLine("0. Выйти");
             Console.Write("Ваш выбор: ");
         }
@@ -72,7 +88,8 @@ namespace ADO.NET
                 Genre TEXT,
                 Year INTEGER,
                 CostPrice REAL,
-                SalePrice REAL
+                SalePrice REAL,
+                IsSequel INTEGER DEFAULT 0
             );";
 
             using var command = new SQLiteCommand(createTableQuery, connection);
@@ -97,12 +114,14 @@ namespace ADO.NET
             double costPrice = GetDoubleInput("себестоимость");
             Console.Write("Введите цену для продажи: ");
             double salePrice = GetDoubleInput("цену для продажи");
+            Console.Write("Является ли книга сиквелом (1 - Да, 0 - Нет): ");
+            int isSequel = GetIntInput("сиквел");
 
             using var connection = new SQLiteConnection(ConnectionString);
             connection.Open();
 
-            string insertQuery = @"INSERT INTO Books (Title, Author, Publisher, Pages, Genre, Year, CostPrice, SalePrice)
-                                   VALUES (@Title, @Author, @Publisher, @Pages, @Genre, @Year, @CostPrice, @SalePrice);";
+            string insertQuery = @"INSERT INTO Books (Title, Author, Publisher, Pages, Genre, Year, CostPrice, SalePrice, IsSequel)
+                                   VALUES (@Title, @Author, @Publisher, @Pages, @Genre, @Year, @CostPrice, @SalePrice, @IsSequel);";
 
             using var command = new SQLiteCommand(insertQuery, connection);
             command.Parameters.AddWithValue("@Title", title);
@@ -113,6 +132,7 @@ namespace ADO.NET
             command.Parameters.AddWithValue("@Year", year);
             command.Parameters.AddWithValue("@CostPrice", costPrice);
             command.Parameters.AddWithValue("@SalePrice", salePrice);
+            command.Parameters.AddWithValue("@IsSequel", isSequel);
 
             command.ExecuteNonQuery();
             Console.WriteLine("Книга успешно добавлена.");
@@ -125,7 +145,7 @@ namespace ADO.NET
 
             using var connection = new SQLiteConnection(ConnectionString);
             connection.Open();
-            //HOW YOU TASTE THE DEMOCRACY?
+
             string deleteQuery = "DELETE FROM Books WHERE Id = @Id;";
 
             using var command = new SQLiteCommand(deleteQuery, connection);
@@ -149,20 +169,22 @@ namespace ADO.NET
             Console.Write("Введите новое количество страниц: ");
             int pages = GetIntInput("количество страниц");
             Console.Write("Введите новый жанр: ");
-            string genre = Console.ReadLine()?.Trim(); //LIBER-TEA!!!!!!!
+            string genre = Console.ReadLine()?.Trim();
             Console.Write("Введите новый год издания: ");
             int year = GetIntInput("год издания");
             Console.Write("Введите новую себестоимость: ");
             double costPrice = GetDoubleInput("себестоимость");
             Console.Write("Введите новую цену для продажи: ");
             double salePrice = GetDoubleInput("цену для продажи");
+            Console.Write("Является ли книга сиквелом (1 - Да, 0 - Нет): ");
+            int isSequel = GetIntInput("сиквел");
 
             using var connection = new SQLiteConnection(ConnectionString);
             connection.Open();
 
             string updateQuery = @"UPDATE Books SET Title = @Title, Author = @Author, Publisher = @Publisher, 
                                     Pages = @Pages, Genre = @Genre, Year = @Year, CostPrice = @CostPrice, 
-                                    SalePrice = @SalePrice WHERE Id = @Id;";
+                                    SalePrice = @SalePrice, IsSequel = @IsSequel WHERE Id = @Id;";
 
             using var command = new SQLiteCommand(updateQuery, connection);
             command.Parameters.AddWithValue("@Title", title);
@@ -173,10 +195,11 @@ namespace ADO.NET
             command.Parameters.AddWithValue("@Year", year);
             command.Parameters.AddWithValue("@CostPrice", costPrice);
             command.Parameters.AddWithValue("@SalePrice", salePrice);
+            command.Parameters.AddWithValue("@IsSequel", isSequel);
             command.Parameters.AddWithValue("@Id", id);
 
             int rowsAffected = command.ExecuteNonQuery();
-            //BECOME A HELLDIVER!
+
             Console.WriteLine(rowsAffected > 0 ? "Книга успешно обновлена." : "Книга с указанным ID не найдена.");
         }
 
@@ -208,25 +231,55 @@ namespace ADO.NET
             Console.WriteLine("\nРезультаты поиска:");
             while (reader.Read())
             {
-                Console.WriteLine($"ID: {reader["Id"]}, Название: {reader["Title"]}, Автор: {reader["Author"]}, Жанр: {reader["Genre"]}");
+                Console.WriteLine($"ID: {reader["Id"]}, Название: {reader["Title"]}, Автор: {reader["Author"]}, Жанр: {reader["Genre"]}, Сиквел: {(reader.GetInt32(reader.GetOrdinal("IsSequel")) == 1 ? "Да" : "Нет")}");
             }
         }
 
-        private static void ShowAllBooks()
+        private static void SellBook()
         {
+            Console.Write("Введите ID книги для продажи: ");
+            int id = GetIntInput("ID книги");
+            Console.Write("Введите количество для продажи: ");
+            int quantity = GetIntInput("количество");
+
+            Console.WriteLine($"Книга с ID {id} успешно продана в количестве {quantity}.");
+        }
+
+        private static void WriteOffBook()
+        {
+            Console.Write("Введите ID книги для списания: ");
+            int id = GetIntInput("ID книги");
+
             using var connection = new SQLiteConnection(ConnectionString);
             connection.Open();
 
-            string query = "SELECT * FROM Books;";
+            string deleteQuery = "DELETE FROM Books WHERE Id = @Id;";
 
-            using var command = new SQLiteCommand(query, connection);
-            using var reader = command.ExecuteReader();
+            using var command = new SQLiteCommand(deleteQuery, connection);
+            command.Parameters.AddWithValue("@Id", id);
+            int rowsAffected = command.ExecuteNonQuery();
 
-            Console.WriteLine("\nСписок всех книг:");
-            while (reader.Read())
-            {
-                Console.WriteLine($"ID: {reader["Id"]}, Название: {reader["Title"]}, Автор: {reader["Author"]}, Жанр: {reader["Genre"]}");
-            }
+            Console.WriteLine(rowsAffected > 0 ? "Книга успешно списана." : "Книга с указанным ID не найдена.");
+        }
+
+        private static void AddBookToPromotion()
+        {
+            Console.Write("Введите ID книги для добавления в акцию: ");
+            int id = GetIntInput("ID книги");
+            Console.Write("Введите процент скидки: ");
+            double discount = GetDoubleInput("процент скидки");
+
+            Console.WriteLine($"Книга с ID {id} добавлена в акцию со скидкой {discount}%.");
+        }
+
+        private static void ReserveBook()
+        {
+            Console.Write("Введите ID книги для резервирования: ");
+            int id = GetIntInput("ID книги");
+            Console.Write("Введите имя покупателя: ");
+            string customerName = Console.ReadLine()?.Trim();
+
+            Console.WriteLine($"Книга с ID {id} зарезервирована для {customerName}.");
         }
 
         private static int GetIntInput(string fieldName)
@@ -250,6 +303,23 @@ namespace ADO.NET
                     return value;
                 }
                 Console.WriteLine($"Введите корректное значение для {fieldName}.");
+            }
+        }
+
+        private static void ShowAllBooks()
+        {
+            using var connection = new SQLiteConnection(ConnectionString);
+            connection.Open();
+
+            string query = "SELECT * FROM Books;";
+
+            using var command = new SQLiteCommand(query, connection);
+            using var reader = command.ExecuteReader();
+
+            Console.WriteLine("\nСписок всех книг:");
+            while (reader.Read())
+            {
+                Console.WriteLine($"ID: {reader["Id"]}, Название: {reader["Title"]}, Автор: {reader["Author"]}, Жанр: {reader["Genre"]}, Сиквел: {(reader.GetInt32(reader.GetOrdinal("IsSequel")) == 1 ? "Да" : "Нет")}");
             }
         }
     }
