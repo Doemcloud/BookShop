@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Data.SQLite;
-using System.Collections.Generic;
 
 namespace ADO.NET
 {
@@ -11,7 +10,13 @@ namespace ADO.NET
         static void Main(string[] args)
         {
             InitializeDatabase();
-            Console.WriteLine("Добро пожаловать в Книжный магазин имени Арсения Борисовича!");
+            Console.WriteLine("Добро пожаловать в Книжный магазин!");
+
+            if (!AuthenticateUser())
+            {
+                Console.WriteLine("Ошибка входа. Завершение программы.");
+                return;
+            }
 
             while (true)
             {
@@ -37,16 +42,16 @@ namespace ADO.NET
                         ShowAllBooks();
                         break;
                     case "6":
-                        SellBook();
+                        ShowNewBooks();
                         break;
                     case "7":
-                        WriteOffBook();
+                        ShowTopSellingBooks();
                         break;
                     case "8":
-                        AddBookToPromotion();
+                        ShowPopularAuthors();
                         break;
                     case "9":
-                        ReserveBook();
+                        ShowPopularGenres();
                         break;
                     case "0":
                         Console.WriteLine("Выход из программы.");
@@ -66,10 +71,10 @@ namespace ADO.NET
             Console.WriteLine("3. Редактировать книгу");
             Console.WriteLine("4. Найти книгу");
             Console.WriteLine("5. Показать все книги");
-            Console.WriteLine("6. Продать книгу");
-            Console.WriteLine("7. Списать книгу");
-            Console.WriteLine("8. Добавить книгу в акцию");
-            Console.WriteLine("9. Отложить книгу для покупателя");
+            Console.WriteLine("6. Показать новинки");
+            Console.WriteLine("7. Показать самые продаваемые книги");
+            Console.WriteLine("8. Показать популярных авторов");
+            Console.WriteLine("9. Показать популярные жанры");
             Console.WriteLine("0. Выйти");
             Console.Write("Ваш выбор: ");
         }
@@ -79,21 +84,63 @@ namespace ADO.NET
             using var connection = new SQLiteConnection(ConnectionString);
             connection.Open();
 
-            string createTableQuery = @"CREATE TABLE IF NOT EXISTS Books (
-                Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                Title TEXT NOT NULL,
-                Author TEXT NOT NULL,
-                Publisher TEXT,
-                Pages INTEGER,
-                Genre TEXT,
-                Year INTEGER,
-                CostPrice REAL,
-                SalePrice REAL,
-                IsSequel INTEGER DEFAULT 0
-            );";
+            string createBooksTable = @"
+                CREATE TABLE IF NOT EXISTS Books (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    Title TEXT NOT NULL,
+                    Author TEXT NOT NULL,
+                    Publisher TEXT,
+                    Pages INTEGER,
+                    Genre TEXT,
+                    Year INTEGER,
+                    CostPrice REAL,
+                    SalePrice REAL,
+                    IsSequel INTEGER DEFAULT 0
+                );";
 
-            using var command = new SQLiteCommand(createTableQuery, connection);
-            command.ExecuteNonQuery();
+            string createUsersTable = @"
+                CREATE TABLE IF NOT EXISTS Users (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    Username TEXT NOT NULL UNIQUE,
+                    Password TEXT NOT NULL
+                );";
+
+            string createSalesTable = @"
+                CREATE TABLE IF NOT EXISTS Sales (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    BookId INTEGER NOT NULL,
+                    Quantity INTEGER NOT NULL,
+                    SaleDate DATETIME NOT NULL,
+                    FOREIGN KEY (BookId) REFERENCES Books(Id)
+                );";
+
+            using var commandBooks = new SQLiteCommand(createBooksTable, connection);
+            commandBooks.ExecuteNonQuery();
+
+            using var commandUsers = new SQLiteCommand(createUsersTable, connection);
+            commandUsers.ExecuteNonQuery();
+
+            using var commandSales = new SQLiteCommand(createSalesTable, connection);
+            commandSales.ExecuteNonQuery();
+        }
+
+        private static bool AuthenticateUser()
+        {
+            Console.Write("Введите логин: ");
+            string username = Console.ReadLine()?.Trim();
+            Console.Write("Введите пароль: ");
+            string password = Console.ReadLine()?.Trim();
+
+            using var connection = new SQLiteConnection(ConnectionString);
+            connection.Open();
+
+            string query = "SELECT COUNT(1) FROM Users WHERE Username = @Username AND Password = @Password;";
+            using var command = new SQLiteCommand(query, connection);
+            command.Parameters.AddWithValue("@Username", username);
+            command.Parameters.AddWithValue("@Password", password);
+
+            int userExists = Convert.ToInt32(command.ExecuteScalar());
+            return userExists > 0;
         }
 
         private static void AddBook()
@@ -120,8 +167,9 @@ namespace ADO.NET
             using var connection = new SQLiteConnection(ConnectionString);
             connection.Open();
 
-            string insertQuery = @"INSERT INTO Books (Title, Author, Publisher, Pages, Genre, Year, CostPrice, SalePrice, IsSequel)
-                                   VALUES (@Title, @Author, @Publisher, @Pages, @Genre, @Year, @CostPrice, @SalePrice, @IsSequel);";
+            string insertQuery = @"
+                INSERT INTO Books (Title, Author, Publisher, Pages, Genre, Year, CostPrice, SalePrice, IsSequel)
+                VALUES (@Title, @Author, @Publisher, @Pages, @Genre, @Year, @CostPrice, @SalePrice, @IsSequel);";
 
             using var command = new SQLiteCommand(insertQuery, connection);
             command.Parameters.AddWithValue("@Title", title);
@@ -147,11 +195,10 @@ namespace ADO.NET
             connection.Open();
 
             string deleteQuery = "DELETE FROM Books WHERE Id = @Id;";
-
             using var command = new SQLiteCommand(deleteQuery, connection);
             command.Parameters.AddWithValue("@Id", id);
-            int rowsAffected = command.ExecuteNonQuery();
 
+            int rowsAffected = command.ExecuteNonQuery();
             Console.WriteLine(rowsAffected > 0 ? "Книга успешно удалена." : "Книга с указанным ID не найдена.");
         }
 
@@ -182,9 +229,12 @@ namespace ADO.NET
             using var connection = new SQLiteConnection(ConnectionString);
             connection.Open();
 
-            string updateQuery = @"UPDATE Books SET Title = @Title, Author = @Author, Publisher = @Publisher, 
-                                    Pages = @Pages, Genre = @Genre, Year = @Year, CostPrice = @CostPrice, 
-                                    SalePrice = @SalePrice, IsSequel = @IsSequel WHERE Id = @Id;";
+            string updateQuery = @"
+                UPDATE Books
+                SET Title = @Title, Author = @Author, Publisher = @Publisher,
+                    Pages = @Pages, Genre = @Genre, Year = @Year,
+                    CostPrice = @CostPrice, SalePrice = @SalePrice, IsSequel = @IsSequel
+                WHERE Id = @Id;";
 
             using var command = new SQLiteCommand(updateQuery, connection);
             command.Parameters.AddWithValue("@Title", title);
@@ -199,13 +249,13 @@ namespace ADO.NET
             command.Parameters.AddWithValue("@Id", id);
 
             int rowsAffected = command.ExecuteNonQuery();
-
             Console.WriteLine(rowsAffected > 0 ? "Книга успешно обновлена." : "Книга с указанным ID не найдена.");
         }
 
         private static void SearchBooks()
         {
-            Console.Write("Введите параметр для поиска (оставьте пустым, чтобы пропустить):\nНазвание: ");
+            Console.Write("Введите параметры поиска (оставьте пустым для пропуска):");
+            Console.Write("\nНазвание: ");
             string title = Console.ReadLine()?.Trim();
             Console.Write("Автор: ");
             string author = Console.ReadLine()?.Trim();
@@ -215,94 +265,22 @@ namespace ADO.NET
             using var connection = new SQLiteConnection(ConnectionString);
             connection.Open();
 
-            string searchQuery = "SELECT * FROM Books WHERE 1=1";
-            if (!string.IsNullOrEmpty(title)) searchQuery += " AND Title LIKE @Title";
-            if (!string.IsNullOrEmpty(author)) searchQuery += " AND Author LIKE @Author";
-            if (!string.IsNullOrEmpty(genre)) searchQuery += " AND Genre LIKE @Genre";
+            string query = "SELECT * FROM Books WHERE 1=1";
+            if (!string.IsNullOrEmpty(title)) query += " AND Title LIKE @Title";
+            if (!string.IsNullOrEmpty(author)) query += " AND Author LIKE @Author";
+            if (!string.IsNullOrEmpty(genre)) query += " AND Genre LIKE @Genre";
 
-            using var command = new SQLiteCommand(searchQuery, connection);
-
-            if (!string.IsNullOrEmpty(title)) command.Parameters.AddWithValue("@Title", "%" + title + "%");
-            if (!string.IsNullOrEmpty(author)) command.Parameters.AddWithValue("@Author", "%" + author + "%");
-            if (!string.IsNullOrEmpty(genre)) command.Parameters.AddWithValue("@Genre", "%" + genre + "%");
+            using var command = new SQLiteCommand(query, connection);
+            if (!string.IsNullOrEmpty(title)) command.Parameters.AddWithValue("@Title", $"%{title}%");
+            if (!string.IsNullOrEmpty(author)) command.Parameters.AddWithValue("@Author", $"%{author}%");
+            if (!string.IsNullOrEmpty(genre)) command.Parameters.AddWithValue("@Genre", $"%{genre}%");
 
             using var reader = command.ExecuteReader();
 
             Console.WriteLine("\nРезультаты поиска:");
             while (reader.Read())
             {
-                Console.WriteLine($"ID: {reader["Id"]}, Название: {reader["Title"]}, Автор: {reader["Author"]}, Жанр: {reader["Genre"]}, Сиквел: {(reader.GetInt32(reader.GetOrdinal("IsSequel")) == 1 ? "Да" : "Нет")}");
-            }
-        }
-
-        private static void SellBook()
-        {
-            Console.Write("Введите ID книги для продажи: ");
-            int id = GetIntInput("ID книги");
-            Console.Write("Введите количество для продажи: ");
-            int quantity = GetIntInput("количество");
-
-            Console.WriteLine($"Книга с ID {id} успешно продана в количестве {quantity}.");
-        }
-
-        private static void WriteOffBook()
-        {
-            Console.Write("Введите ID книги для списания: ");
-            int id = GetIntInput("ID книги");
-
-            using var connection = new SQLiteConnection(ConnectionString);
-            connection.Open();
-
-            string deleteQuery = "DELETE FROM Books WHERE Id = @Id;";
-
-            using var command = new SQLiteCommand(deleteQuery, connection);
-            command.Parameters.AddWithValue("@Id", id);
-            int rowsAffected = command.ExecuteNonQuery();
-
-            Console.WriteLine(rowsAffected > 0 ? "Книга успешно списана." : "Книга с указанным ID не найдена.");
-        }
-
-        private static void AddBookToPromotion()
-        {
-            Console.Write("Введите ID книги для добавления в акцию: ");
-            int id = GetIntInput("ID книги");
-            Console.Write("Введите процент скидки: ");
-            double discount = GetDoubleInput("процент скидки");
-
-            Console.WriteLine($"Книга с ID {id} добавлена в акцию со скидкой {discount}%.");
-        }
-
-        private static void ReserveBook()
-        {
-            Console.Write("Введите ID книги для резервирования: ");
-            int id = GetIntInput("ID книги");
-            Console.Write("Введите имя покупателя: ");
-            string customerName = Console.ReadLine()?.Trim();
-
-            Console.WriteLine($"Книга с ID {id} зарезервирована для {customerName}.");
-        }
-
-        private static int GetIntInput(string fieldName)
-        {
-            while (true)
-            {
-                if (int.TryParse(Console.ReadLine(), out int value))
-                {
-                    return value;
-                }
-                Console.WriteLine($"Введите корректное значение для {fieldName}.");
-            }
-        }
-
-        private static double GetDoubleInput(string fieldName)
-        {
-            while (true)
-            {
-                if (double.TryParse(Console.ReadLine(), out double value))
-                {
-                    return value;
-                }
-                Console.WriteLine($"Введите корректное значение для {fieldName}.");
+                Console.WriteLine($"ID: {reader["Id"]}, Название: {reader["Title"]}, Автор: {reader["Author"]}, Жанр: {reader["Genre"]}");
             }
         }
 
@@ -312,14 +290,128 @@ namespace ADO.NET
             connection.Open();
 
             string query = "SELECT * FROM Books;";
+            using var command = new SQLiteCommand(query, connection);
+
+            using var reader = command.ExecuteReader();
+            Console.WriteLine("\nВсе книги:");
+            while (reader.Read())
+            {
+                Console.WriteLine($"ID: {reader["Id"]}, Название: {reader["Title"]}, Автор: {reader["Author"]}");
+            }
+        }
+
+        private static void ShowNewBooks()
+        {
+            Console.Write("Введите год для фильтрации новинок: ");
+            int year = GetIntInput("год");
+
+            using var connection = new SQLiteConnection(ConnectionString);
+            connection.Open();
+
+            string query = "SELECT * FROM Books WHERE Year >= @Year;";
+            using var command = new SQLiteCommand(query, connection);
+            command.Parameters.AddWithValue("@Year", year);
+
+            using var reader = command.ExecuteReader();
+            Console.WriteLine("\nНовинки:");
+            while (reader.Read())
+            {
+                Console.WriteLine($"ID: {reader["Id"]}, Название: {reader["Title"]}, Год: {reader["Year"]}");
+            }
+        }
+
+        private static void ShowTopSellingBooks()
+        {
+            using var connection = new SQLiteConnection(ConnectionString);
+            connection.Open();
+
+            string query = @"
+                SELECT Books.Title, SUM(Sales.Quantity) AS Sold
+                FROM Sales
+                INNER JOIN Books ON Sales.BookId = Books.Id
+                GROUP BY Sales.BookId
+                ORDER BY Sold DESC
+                LIMIT 10;";
 
             using var command = new SQLiteCommand(query, connection);
             using var reader = command.ExecuteReader();
 
-            Console.WriteLine("\nСписок всех книг:");
+            Console.WriteLine("\nСамые продаваемые книги:");
             while (reader.Read())
             {
-                Console.WriteLine($"ID: {reader["Id"]}, Название: {reader["Title"]}, Автор: {reader["Author"]}, Жанр: {reader["Genre"]}, Сиквел: {(reader.GetInt32(reader.GetOrdinal("IsSequel")) == 1 ? "Да" : "Нет")}");
+                Console.WriteLine($"Название: {reader["Title"]}, Продано: {reader["Sold"]}");
+            }
+        }
+
+        private static void ShowPopularAuthors()
+        {
+            using var connection = new SQLiteConnection(ConnectionString);
+            connection.Open();
+
+            string query = @"
+                SELECT Books.Author, SUM(Sales.Quantity) AS Sold
+                FROM Sales
+                INNER JOIN Books ON Sales.BookId = Books.Id
+                GROUP BY Books.Author
+                ORDER BY Sold DESC
+                LIMIT 10;";
+
+            using var command = new SQLiteCommand(query, connection);
+            using var reader = command.ExecuteReader();
+
+            Console.WriteLine("\nПопулярные авторы:");
+            while (reader.Read())
+            {
+                Console.WriteLine($"Автор: {reader["Author"]}, Продано: {reader["Sold"]}");
+            }
+        }
+
+        private static void ShowPopularGenres()
+        {
+            using var connection = new SQLiteConnection(ConnectionString);
+            connection.Open();
+
+            string query = @"
+                SELECT Books.Genre, SUM(Sales.Quantity) AS Sold
+                FROM Sales
+                INNER JOIN Books ON Sales.BookId = Books.Id
+                GROUP BY Books.Genre
+                ORDER BY Sold DESC
+                LIMIT 10;";
+
+            using var command = new SQLiteCommand(query, connection);
+            using var reader = command.ExecuteReader();
+
+            Console.WriteLine("\nПопулярные жанры:");
+            while (reader.Read())
+            {
+                Console.WriteLine($"Жанр: {reader["Genre"]}, Продано: {reader["Sold"]}");
+            }
+        }
+
+        private static int GetIntInput(string field)
+        {
+            while (true)
+            {
+                Console.Write($"Введите {field}: ");
+                if (int.TryParse(Console.ReadLine(), out int value))
+                {
+                    return value;
+                }
+                Console.WriteLine("Некорректный ввод, попробуйте снова.");
+            }
+        }
+
+        private static double GetDoubleInput(string field)
+        {
+            while (true)
+            {
+                Console.Write($"Введите {field}: ");
+                if (double.TryParse(Console.ReadLine(), out double value))
+                {
+                    return value;
+                }
+                Console.WriteLine("Некорректный ввод, попробуйте снова.");
             }
         }
     }
